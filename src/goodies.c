@@ -12,10 +12,12 @@ EFI_GUID FileInfoGUID = EFI_FILE_INFO_ID;
 // depending on that, so let's not depend on those
 static EFI_SYSTEM_TABLE *gSysTab;
 static EFI_HANDLE gImage;
+static EFI_BOOT_SERVICES *gBootSvc;
 
 void InitGoodies(EFI_HANDLE img, EFI_SYSTEM_TABLE *sys) {
 	gSysTab = sys;
 	gImage = img;
+	gBootSvc = sys->BootServices;
 }
 
 void WaitAnyKey(void) {
@@ -27,7 +29,18 @@ void WaitAnyKey(void) {
 void Fatal(const CHAR16 *msg, EFI_STATUS status) {
 	Print(L"\nERROR: %s (%lx)\n", msg, status);
 	WaitAnyKey();
-	gSysTab->BootServices->Exit(gImage, 1, StrSize(msg), (CHAR16*) msg);
+
+	// Attempt to pass the message as our exit reason string
+	UINTN exitdatasize = StrSize(msg);
+	CHAR16 *exitdata;
+	if (gSysTab->BootServices->AllocatePool(
+		EfiLoaderData, exitdatasize, (void**) &exitdata)) {
+		exitdatasize = 0;
+		exitdata = NULL;
+	} else {
+		StrCpy(exitdata, msg);
+	}
+	gSysTab->BootServices->Exit(gImage, 1, exitdatasize, exitdata);
 }
 
 CHAR16 *HandleToString(EFI_HANDLE h) {
@@ -37,3 +50,14 @@ CHAR16 *HandleToString(EFI_HANDLE h) {
 	if (str == NULL) return L"<NoString>";
 	return str;
 }
+
+
+EFI_STATUS OpenProtocol(EFI_HANDLE h, EFI_GUID *guid, void **ifc) {
+	return gBootSvc->OpenProtocol(h, guid, ifc, gImage, NULL,
+		EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL);
+}
+
+EFI_STATUS CloseProtocol(EFI_HANDLE h, EFI_GUID *guid) {
+	return gBootSvc->CloseProtocol(h, guid, gImage, NULL);
+}
+
