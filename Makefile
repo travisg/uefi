@@ -32,17 +32,14 @@ include build/build.mk
 # declare applications here
 $(call efi_app, hello, hello.c)
 $(call efi_app, showmem, showmem.c)
+$(call efi_app, fileio, fileio.c goodies.c)
 
 # generate a small IDE disk image for qemu
 out/disk.img: $(APPS)
 	@mkdir -p out
 	$(QUIET)./build/mkdiskimg.sh $@
-	@echo copying: $(APPS) to disk.img
-	$(QUIET)mcopy -o -i out/disk.img@@1024K $(APPS) ::
-
-disk.img: test.efi mkdisk.sh
-	./mkdisk.sh test.efi
-	cp test.efi /var/lib/tftpboot/hello.efi
+	@echo copying: $(APPS) README.txt to disk.img
+	$(QUIET)mcopy -o -i out/disk.img@@1024K $(APPS) README.txt ::
 
 ALL += out/disk.img
 
