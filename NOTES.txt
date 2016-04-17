@@ -1,0 +1,40 @@
+
+uefi_call_wrapper()
+-------------------
+gnu-efi provides this macro thing as a workaround for older compilers that
+don't support the right attributes to handle the fact that the EFI calling
+conventions are different than the standard gcc ones.
+
+If HAVE_USE_MS_ABI is defined (as the Makefile here does) and you have a
+compiler that's not a fairly ancient, everything Just Works(tm) and the
+code is much more readable.
+
+
+Intel Visual BIOS (on NUC) and netboot
+--------------------------------------
+This will netboot EFI apps, provided you have a DHCP server which is
+setup to give the BIOS the IP of a tftp server and a filename to grab
+from there.
+
+You must disable legacy boot for the EFI netboot option to appear.  If
+you check the "keep retrying forever" option, when your app exits, the
+BIOS will try to download it from the tftp server again, making for a
+quick build/download/test cycle
+
+
+Making tftpd work on Ubuntu with IPv4
+-------------------------------------
+sudo apt-get install tftpd-hpa
+
+Optionally make it easy to copy files to the server without sudo:
+sudo chown `who` /var/lib/tftpdboot 
+
+Edit /etc/default/tftpd-hpa so it looks more like:
+TFTP_USERNAME="tftp"
+TFTP_DIRECTORY="/var/lib/tftpboot"
+TFTP_ADDRESS=":69"
+TFTP_OPTIONS="--secure -4 -v -v -v"
+
+Removing the [::] and adding the -4 make it work reliably on IPv4 for me.
+The several -v's make it chattier in syslog which is handy if you're not
+sure the test machine is actually trying to grab files.
