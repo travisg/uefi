@@ -1,0 +1,5 @@
+edk2:     r15214
+compiler: GCC 4.7.3 (GCC47)
+binutils: 2.23.2
+iasl:     20100528 [Dec 19 2012]
+system:   Ubuntu 13.04 x86-64
