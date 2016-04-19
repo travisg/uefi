@@ -61,3 +61,82 @@ EFI_STATUS CloseProtocol(EFI_HANDLE h, EFI_GUID *guid) {
 	return gBootSvc->CloseProtocol(h, guid, gImage, NULL);
 }
 
+void *LoadFile(CHAR16 *filename, UINTN *_sz) {
+	EFI_LOADED_IMAGE *loaded;
+	EFI_STATUS r;
+	void *data = NULL;
+
+	r = OpenProtocol(gImage, &LoadedImageProtocol, (void**) &loaded);
+	if (r) {
+		Print(L"Cannot open LoadedImageProtocol (%x)\n", r);
+		goto exit0;
+	}
+
+	Print(L"Img DeviceHandle='%s'\n", HandleToString(loaded->DeviceHandle));
+	Print(L"Img FilePath='%s'\n", DevicePathToStr(loaded->FilePath));
+	Print(L"Img Base=%lx Size=%lx\n", loaded->ImageBase, loaded->ImageSize);
+
+	EFI_FILE_IO_INTERFACE *fioi;
+	r = OpenProtocol(loaded->DeviceHandle, &SimpleFileSystemProtocol, (void **) &fioi);
+	if (r) {
+		Print(L"Cannot open SimpleFileSystemProtocol (%x)\n", r);
+		goto exit1;
+	}
+
+	EFI_FILE_HANDLE root;
+	r = fioi->OpenVolume(fioi, &root);
+	if (r) {
+		Print(L"Cannot open root volume (%x)\n", r);
+		goto exit2;
+	}
+
+	EFI_FILE_HANDLE file;
+	r = root->Open(root, &file, filename, EFI_FILE_MODE_READ, 0);
+	if (r) {
+		Print(L"Cannot open file '%s' (%x)\n", filename, r);
+		goto exit3;
+	}
+
+	char buf[512];
+	UINTN sz = sizeof(buf);
+	EFI_FILE_INFO *finfo = (void*) buf;
+	r = file->GetInfo(file, &FileInfoGUID, &sz, finfo);
+	if (r) {
+		Print(L"Cannot get FileInfo (%x)\n", r);
+		goto exit3;
+	}
+
+	r = gBootSvc->AllocatePool(EfiLoaderData, finfo->FileSize, (void**) &data);
+	if (r) {
+		Print(L"Cannot allocate buffer (%x)\n", r);
+		data = NULL;
+		goto exit4;
+	}
+
+	sz = finfo->FileSize;
+	r = file->Read(file, &sz, data);
+	if (r) {
+		Print(L"Error reading file (%x)\n", r);
+		gBootSvc->FreePool(data);
+		data = NULL;
+		goto exit4;
+	}
+	if (sz != finfo->FileSize) {
+		Print(L"Short read\n");
+		gBootSvc->FreePool(data);
+		data = NULL;
+		goto exit4;
+	}
+	*_sz = finfo->FileSize;
+exit4:
+	file->Close(file);
+exit3:
+	root->Close(root);
+exit2:
+	CloseProtocol(loaded->DeviceHandle, &SimpleFileSystemProtocol);
+exit1:
+	CloseProtocol(gImage, &LoadedImageProtocol);
+exit0:
+	return data;
+}
+

@@ -11,6 +11,8 @@ CHAR16 *HandleToString(EFI_HANDLE handle);
 EFI_STATUS OpenProtocol(EFI_HANDLE h, EFI_GUID *guid, void **ifc);
 EFI_STATUS CloseProtocol(EFI_HANDLE h, EFI_GUID *guid);
 
+void *LoadFile(CHAR16 *filename, UINTN *size_out);
+
 // GUIDs
 extern EFI_GUID SimpleFileSystemProtocol;
 extern EFI_GUID FileInfoGUID;
