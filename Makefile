@@ -33,6 +33,7 @@ include build/build.mk
 $(call efi_app, hello, hello.c)
 $(call efi_app, showmem, showmem.c)
 $(call efi_app, fileio, fileio.c goodies.c)
+$(call efi_app, osboot, osboot.c goodies.c)
 
 # generate a small IDE disk image for qemu
 out/disk.img: $(APPS)
