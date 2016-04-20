@@ -28,6 +28,7 @@ out/%.efi: out/%.so
 	@mkdir -p out
 	@echo building: $@
 	$(QUIET)$(EFI_OBJCOPY) --target=efi-app-$(ARCH) $(EFI_SECTIONS) $< $@
+	$(QUIET)if [ "`nm $< | grep ' U '`" != "" ]; then echo "error: $<: undefined symbols"; nm $< | grep ' U '; rm $<; exit 1; fi
 
 out/%.dbg: out/%.so
 	@mkdir -p out
