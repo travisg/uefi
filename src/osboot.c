@@ -112,10 +112,20 @@ int process_memory_map(EFI_SYSTEM_TABLE *sys, UINTN *_key, int silent) {
 #define ZP_LOADER_TYPE		0x210	// byte
 #define ZP_RAMDISK_BASE		0x218	// word (ptr or 0)
 #define ZP_RAMDISK_SIZE		0x21C	// word (bytes)
+#define ZP_EXTRA_MAGIC		0x220	// word 
 #define ZP_CMDLINE		0x228	// word (ptr)
 #define ZP_SYSSIZE		0x1F4	// word (size/16)
 #define ZP_XLOADFLAGS		0x236	// half
 #define ZP_E820_TABLE		0x2D0	// 128 entries
+
+#define ZP_ACPI_RSD		0x080   // word phys ptr
+#define ZP_FB_BASE		0x090
+#define ZP_FB_WIDTH		0x094
+#define ZP_FB_HEIGHT		0x098
+#define ZP_FB_STRIDE		0x09C
+#define ZP_FB_FORMAT		0x0A0
+
+#define ZP_MAGIC_VALUE		0xDBC64323
 
 #define ZP8(p,off)	(*((UINT8*)((p) + (off))))
 #define ZP16(p,off)	(*((UINT16*)((p) + (off))))
@@ -156,7 +166,6 @@ void start_kernel(kernel_t *k) {
 }
 
 int load_kernel(EFI_BOOT_SERVICES *bs, CHAR16 *fn, kernel_t *k) {
-	int res = -1;
 	UINTN sz;
 	UINT8 *image;
 	UINT32 setup_sz;
@@ -192,7 +201,8 @@ int load_kernel(EFI_BOOT_SERVICES *bs, CHAR16 *fn, kernel_t *k) {
 	setup_end = ZP_JUMP + ZP8(image, ZP_JUMP+1);
 
 	Print(L"setup %d image %d  hdr %04x-%04x\n", setup_sz, image_sz, ZP_SETUP, setup_end);
-	if ((setup_sz < 1024) || ((setup_sz + image_sz) > sz)) {
+	// image size may be rounded up, thus +15
+	if ((setup_sz < 1024) || ((setup_sz + image_sz) > (sz + 15))) {
 		Print(L"kernel: invalid image size\n");
 		goto fail;
 	}
@@ -213,7 +223,7 @@ int load_kernel(EFI_BOOT_SERVICES *bs, CHAR16 *fn, kernel_t *k) {
 
 	mem = 0x100000;
 	k->pages = (image_sz + 4095) / 4096;
-	if (bs->AllocatePages(AllocateAddress, EfiLoaderData, k->pages, &mem)) {
+	if (bs->AllocatePages(AllocateAddress, EfiLoaderData, k->pages + 1, &mem)) {
 		Print(L"kernel: cannot allocate kernel\n");
 		goto fail;
 	}
@@ -279,27 +289,59 @@ void dump_graphics_modes(EFI_GRAPHICS_OUTPUT_PROTOCOL *gop) {
 	}
 }
 
+static EFI_GUID AcpiTableGUID = ACPI_TABLE_GUID;
+static EFI_GUID Acpi2TableGUID = ACPI_20_TABLE_GUID;
+
+static UINT8 ACPI_RSD_PTR[8] = "RSD PTR ";
+
+void *find_acpi_root(EFI_HANDLE img, EFI_SYSTEM_TABLE *sys) {
+	EFI_CONFIGURATION_TABLE *cfgtab = sys->ConfigurationTable;
+	int i;
+
+	for (i = 0; i < sys->NumberOfTableEntries; i++) {
+		if (!CompareGuid(&cfgtab[i].VendorGuid, &AcpiTableGUID) &&
+			!CompareGuid(&cfgtab[i].VendorGuid, &Acpi2TableGUID)) {
+			// not an ACPI table
+			continue;
+		}
+		if (CompareMem(cfgtab[i].VendorTable, ACPI_RSD_PTR, 8)) {
+			// not the Root Description Pointer
+			continue;
+		}
+		return cfgtab[i].VendorTable;
+	}
+	return NULL;
+}
+
 EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE *sys) {
         InitializeLib(img, sys);
 	InitGoodies(img, sys);
 	EFI_STATUS r;
 	kernel_t kernel;
 	UINTN key;
-	void *data;
-	UINTN size;
 	int n;
 
 	Print(L"OSBOOT v0.1\n\n");
 
+	find_acpi_root(img, sys);
+
 	EFI_GRAPHICS_OUTPUT_PROTOCOL *gop;
 	r = sys->BootServices->LocateProtocol(&GraphicsOutputProtocol, NULL, (void**) &gop);
 	Print(L"Framebuffer base is at %lx\n\n", gop->Mode->FrameBufferBase);
-	*((unsigned*) gop->Mode->FrameBufferBase) = 0xffffffff;
 
 	if (load_kernel(sys->BootServices, L"lk.bin", &kernel)) {
 		Print(L"Failed to load kernel image\n");
 		goto fail;
 	}
+
+	ZP32(kernel.zeropage, ZP_EXTRA_MAGIC) = ZP_MAGIC_VALUE;
+	ZP32(kernel.zeropage, ZP_ACPI_RSD) = (UINT32) find_acpi_root(img, sys);
+
+	ZP32(kernel.zeropage, ZP_FB_BASE) = (UINT32) gop->Mode->FrameBufferBase;
+	ZP32(kernel.zeropage, ZP_FB_WIDTH) = (UINT32) gop->Mode->Info->HorizontalResolution;
+	ZP32(kernel.zeropage, ZP_FB_HEIGHT) = (UINT32) gop->Mode->Info->VerticalResolution;
+	ZP32(kernel.zeropage, ZP_FB_STRIDE) = (UINT32) gop->Mode->Info->PixelsPerScanLine;
+	ZP32(kernel.zeropage, ZP_FB_FORMAT) = (UINT32) gop->Mode->Info->PixelFormat;
 
 	n = process_memory_map(sys, &key, 0);
 	if (n > 0) {
