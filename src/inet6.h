@@ -134,7 +134,7 @@ void eth_recv(void *data, size_t len);
 // provided by interface driver
 void *eth_get_buffer(size_t len);
 void eth_put_buffer(void *ptr);
-int eth_send(const void *data, size_t len);
+int eth_send(void *data, size_t len);
 int eth_add_mcast_filter(const mac_addr *addr);
 
 // call to transmit a UDP packet
@@ -164,6 +164,9 @@ void udp6_recv(const void *data, size_t len,
 //
 // It does not currently do duplicate address detection, which is
 // probably the most severe bug.
+//
+// It does not support any IPv6 options and will drop packets with
+// options.
 //
 // It expects the network stack to provide transmit buffer allocation
 // and free functionality.  It will allocate a single transmit buffer
