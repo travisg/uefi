@@ -1,5 +1,6 @@
 #include <efi.h>
 #include <efilib.h>
+#include <string.h>
 
 #include "goodies.h"
 
@@ -139,13 +140,7 @@ typedef struct {
 } kernel_t;
 
 void install_memmap(kernel_t *k, struct e820entry *memmap, unsigned count) {
-	unsigned char *src = (void *) memmap;
-	unsigned char *dst = (void *) (k->zeropage + ZP_E820_TABLE);
-	unsigned sz = sizeof(*memmap) * count;
-	while (sz > 0) {
-		*dst++ = *src++;
-		sz--;
-	}
+	memcpy(memmap, k->zeropage + ZP_E820_TABLE, sizeof(*memmap) * count);
 	ZP8(k->zeropage, ZP_E820_COUNT) = count;
 }
 
