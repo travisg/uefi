@@ -14,6 +14,8 @@ EFI_CRT0	:= $(EFI_PATH)/$(ARCH)/gnuefi/crt0-efi-$(ARCH).o
 EFI_LINKSCRIPT	:= $(EFI_PATH)/gnuefi/elf_$(ARCH)_efi.lds
 
 EFI_CFLAGS	:= -fpic -fshort-wchar -fno-stack-protector -mno-red-zone
+EFI_CFLAGS	+= -Wall
+EFI_CFLAGS	+= -ffreestanding -nostdinc -Iinc
 EFI_CFLAGS	+= $(patsubst %,-I%,$(EFI_INC_PATHS))
 EFI_CFLAGS	+= -DHAVE_USE_MS_ABI=1
 EFI_CFLAGS	+= -ggdb
@@ -33,7 +35,8 @@ include build/build.mk
 $(call efi_app, hello, hello.c)
 $(call efi_app, showmem, showmem.c)
 $(call efi_app, fileio, fileio.c goodies.c)
-$(call efi_app, osboot, osboot.c goodies.c)
+$(call efi_app, osboot, osboot.c goodies.c libc.c)
+$(call efi_app, snptest, snptest.c goodies.c libc.c inet6.c)
 
 # generate a small IDE disk image for qemu
 out/disk.img: $(APPS)
